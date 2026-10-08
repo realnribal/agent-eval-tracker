@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+dist/
+traces/*.jsonl
+!traces/sample_traces.jsonl

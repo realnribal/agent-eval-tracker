@@ -1,0 +1,25 @@
+[project]
+name = "agent-eval-tracker"
+version = "0.1.0"
+description = "Structured traces and error analysis for agentic pipelines."
+readme = "README.md"
+authors = [
+    { name = "Henri BALAMOU", email = "henri.balamou@gmail.com" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "anthropic>=1.12.1",
+    "pydantic",
+    "pytest",
+]
+
+[tool.uv.build-backend]
+module-name = "tracker"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[build-system]
+requires = ["uv_build>=0.12.23,<0.13.0"]
+build-backend = "uv_build"
