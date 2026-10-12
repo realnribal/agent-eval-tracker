@@ -11,7 +11,12 @@ dependencies = [
     "anthropic>=1.12.1",
     "pydantic",
     "pytest",
+    "rich>=15.0.0",
+    "typer>=0.27.3",
 ]
+
+[project.scripts]
+tracker = "tracker.cli:main"
 
 [tool.uv.build-backend]
 module-name = "tracker"
