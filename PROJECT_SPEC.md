@@ -54,7 +54,7 @@ One instrumented step inside a pipeline run.
 
 ```python
 class Span(BaseModel):
-    component: str          # e.g. "search_term_generation", "retrieval", "synthesis"
+    component: str  # e.g. "search_term_generation", "retrieval", "synthesis"
     input: dict | str
     output: dict | str | None
     started_at: datetime
@@ -63,8 +63,8 @@ class Span(BaseModel):
     input_tokens: int | None
     output_tokens: int | None
     cost_usd: float | None
-    success: bool            # did this component complete without error / pass its own check?
-    error: str | None        # exception message if it failed
+    success: bool  # did this component complete without error / pass its own check?
+    error: str | None  # exception message if it failed
 ```
 
 ### Trace
@@ -72,7 +72,7 @@ One full end-to-end pipeline run.
 
 ```python
 class Trace(BaseModel):
-    trace_id: str             # uuid4
+    trace_id: str  # uuid4
     pipeline_name: str
     input: dict | str
     final_output: dict | str | None
@@ -81,7 +81,7 @@ class Trace(BaseModel):
     ended_at: datetime
     total_latency_ms: float
     total_cost_usd: float
-    overall_success: bool     # did the end-to-end run succeed per the eval criterion?
+    overall_success: bool  # did the end-to-end run succeed per the eval criterion?
 ```
 
 Traces are persisted as **JSON Lines** (`traces/*.jsonl`), one Trace per line — this is the
@@ -158,3 +158,57 @@ phase — this mirrors the build/analyze discipline the project itself is meant 
 - A `--component` filter on `report` to drill into one component's failures only.
 - A tiny `rich`-based bar chart of failure rate per component in the terminal.
 - Swap in an LLM-as-judge for `overall_success` instead of a hardcoded heuristic.
+
+## 12. Phase 7 — stretch: LangChain integration
+
+### Goal
+Demonstrate that the same tracker can instrument a pipeline built with a standard framework
+(LangChain), not just hand-written LLM calls. This shows the ability to add observability
+to pre-existing agentic code — a realistic enterprise scenario — rather than only building
+from scratch.
+
+### Scope
+- Do NOT rewrite the existing pipeline (`pipeline.py`). This phase adds a **second, separate
+  pipeline** (e.g. `pipeline_langchain.py`) that reimplements the same 3-step research
+  assistant (generate_search_terms → retrieve → synthesize_answer) using LangChain's
+  `LCEL` (LangChain Expression Language) or a simple `Runnable` chain.
+- Implement a custom `BaseCallbackHandler` (LangChain's hook mechanism for observing chain
+  execution) that converts LangChain's `on_chain_start` / `on_chain_end` / `on_llm_start` /
+  `on_llm_end` / `on_chain_error` events into the existing `Span` and `Trace` pydantic models
+  from `trace.py`. No changes to the Trace/Span schema — the callback handler is the adapter.
+- The callback handler must capture the same fields as the native pipeline: component name
+  (from the chain/step name), input, output, latency, token usage (available on
+  `on_llm_end`'s `response.llm_output`), success/failure, and error message on
+  `on_chain_error`.
+- Traces produced this way are appended to the **same** `traces/traces.jsonl` file, using the
+  same format — so `tracker report` and `analysis.py` work unmodified on both sources. This
+  is the key proof point: the observability layer is decoupled from how the pipeline itself
+  is built.
+
+### New dependencies
+- `langchain` and `langchain-anthropic` (or `langchain-core` if you want the lighter-weight
+  LCEL-only package instead of the full framework).
+
+### CLI addition
+```
+tracker run --engine langchain "What are the main agentic design patterns?"
+tracker run --engine native "..."     # existing Phase 3 pipeline, now explicit via a flag
+```
+
+### Tests
+- `test_pipeline_langchain.py`: running the LangChain pipeline produces a valid Trace with the
+  expected number of Spans, and a failing step is captured as `success=False` rather than
+  raising unhandled out of the callback handler.
+- A shared test asserting that `analysis.py`'s aggregation logic produces identical output
+  structure regardless of whether the traces came from the native or the LangChain pipeline.
+
+### README addition
+A short paragraph explaining the point of this phase explicitly: "the same observability
+format works whether the agentic pipeline is hand-rolled or built with a framework like
+LangChain — this mirrors a common real-world task: adding error analysis and cost tracking
+to an existing LangChain-based system." This is the sentence you'll reuse almost verbatim
+in an interview.
+
+### Order
+Implement this only after Phases 1-6 are complete and `tracker report` works end-to-end on
+native traces. This phase is additive and should never block or modify the native pipeline.
